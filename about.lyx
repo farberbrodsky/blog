@@ -1,0 +1,133 @@
+#LyX 2.3 created this file. For more info see http://www.lyx.org/
+\lyxformat 544
+\begin_document
+\begin_header
+\save_transient_properties true
+\origin unavailable
+\textclass article
+\begin_preamble
+\usepackage[use-david]{culmus}
+\end_preamble
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman "default" "default"
+\font_sans "default" "default"
+\font_typewriter "default" "default"
+\font_math "auto" "auto"
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100 100
+\font_tt_scale 100 100
+\use_microtype false
+\use_dash_ligatures true
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\float_placement H
+\paperfontsize default
+\spacing single
+\use_hyperref false
+\papersize a4paper
+\use_geometry true
+\use_package amsmath 1
+\use_package amssymb 1
+\use_package cancel 1
+\use_package esint 1
+\use_package mathdots 1
+\use_package mathtools 1
+\use_package mhchem 1
+\use_package stackrel 1
+\use_package stmaryrd 1
+\use_package undertilde 1
+\cite_engine basic
+\cite_engine_type default
+\biblio_style plain
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date true
+\justification true
+\use_refstyle 1
+\use_minted 0
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\leftmargin 2cm
+\topmargin 2cm
+\rightmargin 2cm
+\bottommargin 2cm
+\headheight 1cm
+\headsep 1cm
+\footskip 1cm
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation skip
+\defskip smallskip
+\is_math_indent 0
+\math_numbering_side default
+\quotes_style english
+\dynamic_quotes 0
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Section*
+About me
+\end_layout
+
+\begin_layout Standard
+Hi, I'm Misha! I'm a INSERT_AGE_HERE year old computer science student studying
+ in Tel Aviv University.
+ You can find me on 
+\begin_inset CommandInset href
+LatexCommand href
+name "GitHub"
+target "https://github.com/farberbrodsky/"
+literal "false"
+
+\end_inset
+
+ or email (misha@farberbrodsky.com, though email sucks).
+\end_layout
+
+\begin_layout Standard
+I like writing lower-level code in C because doing stuff manually makes
+ it so much more interesting.
+ I have also written a lot of Python and JavaScript (web) code, much of
+ which isn't on my GitHub and is lost forever because I thought such garbage
+ code doesn't belong there (silly me, 
+\shape italic
+everyone
+\shape default
+ puts garbage code on github).
+\end_layout
+
+\begin_layout Standard
+Despite having written lots of JS, I think it doesn't belong on this website,
+ so this website is rendered entirely statically (with absolutely 
+\shape italic
+garbage
+\shape default
+ Python code) and is actually based on LyX (a LaTeX GUI that works in Hebrew)
+ documents.
+\end_layout
+
+\end_body
+\end_document
