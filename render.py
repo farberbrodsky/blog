@@ -1,5 +1,8 @@
 import os
 import shutil
+import pygments
+import pygments.lexers
+import pygments.formatters
 from pathlib import Path
 from datetime import datetime
 from css_html_js_minify import html_minify, css_minify
@@ -149,7 +152,96 @@ td {
     padding: 4px 6px;
     border: 1px black solid;
 }
-""")
+
+ul, ol {
+    list-style-position: inside;
+}
+ul {
+    list-style-type: disc;
+}
+ol {
+    list-style-type: decimal;
+}
+ul ul, ul ol, ol ol, ol ul {
+    padding-left: 32px;
+}
+/* increase spacing */
+li::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+}""")
+code_style = css_minify("""
+.highlight pre {
+    font-family: monospace;
+    background: #fdfdfd;
+    border: #aaa 1px solid;
+    padding: 8px;
+    margin: 8px 0;
+    border-radius: 4px;
+    white-space: pre-wrap;
+}
+.highlight .hll { background-color: #ffffcc }
+.highlight .c { color: #999988; font-style: italic } /* Comment */
+.highlight .err { color: #a61717; background-color: #e3d2d2 } /* Error */
+.highlight .k { color: #000000; font-weight: bold } /* Keyword */
+.highlight .o { color: #000000; font-weight: bold } /* Operator */
+.highlight .cm { color: #999988; font-style: italic } /* Comment.Multiline */
+.highlight .cp { color: #999999; font-weight: bold; font-style: italic } /* Comment.Preproc */
+.highlight .c1 { color: #999988; font-style: italic } /* Comment.Single */
+.highlight .cs { color: #999999; font-weight: bold; font-style: italic } /* Comment.Special */
+.highlight .gd { color: #000000; background-color: #ffdddd } /* Generic.Deleted */
+.highlight .ge { color: #000000; font-style: italic } /* Generic.Emph */
+.highlight .gr { color: #aa0000 } /* Generic.Error */
+.highlight .gh { color: #999999 } /* Generic.Heading */
+.highlight .gi { color: #000000; background-color: #ddffdd } /* Generic.Inserted */
+.highlight .go { color: #888888 } /* Generic.Output */
+.highlight .gp { color: #555555 } /* Generic.Prompt */
+.highlight .gs { font-weight: bold } /* Generic.Strong */
+.highlight .gu { color: #aaaaaa } /* Generic.Subheading */
+.highlight .gt { color: #aa0000 } /* Generic.Traceback */
+.highlight .kc { color: #000000; font-weight: bold } /* Keyword.Constant */
+.highlight .kd { color: #000000; font-weight: bold } /* Keyword.Declaration */
+.highlight .kn { color: #000000; font-weight: bold } /* Keyword.Namespace */
+.highlight .kp { color: #000000; font-weight: bold } /* Keyword.Pseudo */
+.highlight .kr { color: #000000; font-weight: bold } /* Keyword.Reserved */
+.highlight .kt { color: #445588; font-weight: bold } /* Keyword.Type */
+.highlight .m { color: #009999 } /* Literal.Number */
+.highlight .s { color: #d01040 } /* Literal.String */
+.highlight .na { color: #008080 } /* Name.Attribute */
+.highlight .nb { color: #0086B3 } /* Name.Builtin */
+.highlight .nc { color: #445588; font-weight: bold } /* Name.Class */
+.highlight .no { color: #008080 } /* Name.Constant */
+.highlight .nd { color: #3c5d5d; font-weight: bold } /* Name.Decorator */
+.highlight .ni { color: #800080 } /* Name.Entity */
+.highlight .ne { color: #990000; font-weight: bold } /* Name.Exception */
+.highlight .nf { color: #990000; font-weight: bold } /* Name.Function */
+.highlight .nl { color: #990000; font-weight: bold } /* Name.Label */
+.highlight .nn { color: #555555 } /* Name.Namespace */
+.highlight .nt { color: #000080 } /* Name.Tag */
+.highlight .nv { color: #008080 } /* Name.Variable */
+.highlight .ow { color: #000000; font-weight: bold } /* Operator.Word */
+.highlight .w { color: #bbbbbb } /* Text.Whitespace */
+.highlight .mf { color: #009999 } /* Literal.Number.Float */
+.highlight .mh { color: #009999 } /* Literal.Number.Hex */
+.highlight .mi { color: #009999 } /* Literal.Number.Integer */
+.highlight .mo { color: #009999 } /* Literal.Number.Oct */
+.highlight .sb { color: #d01040 } /* Literal.String.Backtick */
+.highlight .sc { color: #d01040 } /* Literal.String.Char */
+.highlight .sd { color: #d01040 } /* Literal.String.Doc */
+.highlight .s2 { color: #d01040 } /* Literal.String.Double */
+.highlight .se { color: #d01040 } /* Literal.String.Escape */
+.highlight .sh { color: #d01040 } /* Literal.String.Heredoc */
+.highlight .si { color: #d01040 } /* Literal.String.Interpol */
+.highlight .sx { color: #d01040 } /* Literal.String.Other */
+.highlight .sr { color: #009926 } /* Literal.String.Regex */
+.highlight .s1 { color: #d01040 } /* Literal.String.Single */
+.highlight .ss { color: #990073 } /* Literal.String.Symbol */
+.highlight .bp { color: #999999 } /* Name.Builtin.Pseudo */
+.highlight .vc { color: #008080 } /* Name.Variable.Class */
+.highlight .vg { color: #008080 } /* Name.Variable.Global */
+.highlight .vi { color: #008080 } /* Name.Variable.Instance */
+.highlight .il { color: #009999 } /* Literal.Number.Integer.Long */""")
 
 def compile_lyx_file(filename):
     if os.popen(f"lyx --export xhtml {filename}").close() != None:
@@ -163,10 +255,53 @@ def compile_lyx_file(filename):
 
     # take only the body
     lyx_output = lyx_output[(lyx_output.index('<body dir="auto">\n') + 1):lyx_output.index('</body>\n')]
-    return lyx_output
+    # syntax highlighting for pre class="listings programming-language"
+    code_changes = []
+    for index, line in enumerate(lyx_output):
+        if "float-listings" in line:
+            # first line in code
+            _ = "<div class='float-listings'><pre class ='listings"
+            after_start = line[(line.find(_) + len(_)):]
+            first_index = index
+            lang = "raw"
+            if after_start[0] == ' ':
+                lang = after_start[1:].split(" ")[0]
+                lang = lang[:lang.index("'")]
+
+            code_inside = after_start[(after_start.index(">") + 1):]
+
+            line = lyx_output[index]
+            while True:
+                index += 1
+                line = lyx_output[index]
+                if line.endswith("</pre></div>\n"):
+                    code_inside += line[:-13]
+                    break
+                else:
+                    code_inside += line
+
+            # we have the language and the code
+            try:
+                new_code = pygments.highlight(code_inside,
+                                pygments.lexers.get_lexer_by_name(lang), pygments.formatters.HtmlFormatter())
+            except:
+                print("Error in", code_inside)
+            code_changes.append((new_code, first_index, index))
+    # apply code changes
+    for change_code, change_start, change_end in code_changes:
+        lyx_output[change_start] = change_code
+        for i in range(change_start + 1, change_end + 1):
+            lyx_output[i] = "REMOVE_THIS"
+
+    extra_style = ""
+    if len(code_changes) > 0:
+        extra_style += code_style
+
+    lyx_output = list(filter(lambda x: x != "REMOVE_THIS", lyx_output))
+    return lyx_output, extra_style
 
 def render_one_article(filename):
-    lyx_output = compile_lyx_file(filename)
+    lyx_output, extra_style = compile_lyx_file(filename)
     title = lyx_output[0][(lyx_output[0].index(">") + 1):lyx_output[0].index("</")]
     # put the title and the date (and author) in one titledate, and the rest into <article>
     if 'class="author"' in lyx_output[1]:
@@ -178,7 +313,7 @@ def render_one_article(filename):
     # add the website navbar
     lyx_output = [navbar] + lyx_output
 
-    result = html_minify(html_base + f"{title}</title><style>" + article_style + "</style></head><body>" + "".join(lyx_output) + "</body></html>")
+    result = html_minify(html_base + f"{title}</title><style>" + article_style + extra_style + "</style></head><body>" + "".join(lyx_output) + "</body></html>")
     return result, title, date
 
 # Remove existing render
@@ -256,8 +391,9 @@ my_age = now.year - 2005
 if now.month < 4 or (now.month == 4 and now.day < 20):
     my_age -= 1
 
-about_lyx = "".join(compile_lyx_file(Path("./about.lyx"))).replace("INSERT_AGE_HERE", str(my_age))
-about_page = html_base + f"Misha Farber Brodsky - About page</title><style>{article_style}</style></head><body>{navbar}<article>{about_lyx}</article></body></html>"
+compiled_about, compiled_about_extra_style = compile_lyx_file(Path("./about.lyx"))
+about_lyx = "".join(compiled_about).replace("INSERT_AGE_HERE", str(my_age))
+about_page = html_base + f"Misha Farber Brodsky - About page</title><style>{article_style + compiled_about_extra_style}</style></head><body>{navbar}<article>{about_lyx}</article></body></html>"
 with open("./docs/about.html", "w") as f:
     f.write(html_minify(about_page))
 

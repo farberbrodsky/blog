@@ -1,0 +1,671 @@
+#LyX 2.3 created this file. For more info see http://www.lyx.org/
+\lyxformat 544
+\begin_document
+\begin_header
+\save_transient_properties true
+\origin unavailable
+\textclass article
+\begin_preamble
+\usepackage[use-david]{culmus}
+\end_preamble
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman "default" "default"
+\font_sans "default" "default"
+\font_typewriter "default" "default"
+\font_math "auto" "auto"
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100 100
+\font_tt_scale 100 100
+\use_microtype false
+\use_dash_ligatures true
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\float_placement H
+\paperfontsize default
+\spacing single
+\use_hyperref false
+\papersize a4paper
+\use_geometry true
+\use_package amsmath 1
+\use_package amssymb 1
+\use_package cancel 1
+\use_package esint 1
+\use_package mathdots 1
+\use_package mathtools 1
+\use_package mhchem 1
+\use_package stackrel 1
+\use_package stmaryrd 1
+\use_package undertilde 1
+\cite_engine basic
+\cite_engine_type default
+\biblio_style plain
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date true
+\justification true
+\use_refstyle 1
+\use_minted 0
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\leftmargin 2cm
+\topmargin 2cm
+\rightmargin 2cm
+\bottommargin 2cm
+\headheight 1cm
+\headsep 1cm
+\footskip 1cm
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation skip
+\defskip smallskip
+\is_math_indent 0
+\math_numbering_side default
+\quotes_style english
+\dynamic_quotes 0
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Title
+Debuggers - how they work and how to make one on Linux
+\end_layout
+
+\begin_layout Date
+July 20, 2021
+\end_layout
+
+\begin_layout Standard
+Debuggers are like magic.
+ You can take a program and see what cards it is holding, change the cards
+ of the program without it seeing anything, and put a bunny into its hat.
+\end_layout
+
+\begin_layout Standard
+It's impolite to ask how magic works, but deep inside, you ask yourself,
+ how do debuggers work? Don't processes run directly on the CPU and thus
+ can't be stopped at breakpoints or single-steps? And reading another process's
+ memory and registers, isn't this something users can't do?
+\end_layout
+
+\begin_layout Section*
+The abstract
+\end_layout
+
+\begin_layout Standard
+Though there are hardware breakpoints (which are stored in 8 registers on
+ x86), this feels like cheating, and they're also very limited in number.
+ Software breakpoints are much more interesting.
+\end_layout
+
+\begin_layout Standard
+To stop the execution of the program and hand over control to the kernel,
+ we must have some sort of interrupt or system-call.
+ Interrupt 3 is commonly used for this purpose, and it even has a single-byte
+ instruction: 0xCC.
+ We could have used any other exception, such as division by zero, but interrupt
+ 3 is the most convenient.
+\end_layout
+
+\begin_layout Standard
+At this point, the process is stopped.
+ If we are debugging this process, the kind kernel gives us the power to
+ play with it - since the process isn't physically running, and is only
+ stored in the kernel's memory, there's nothing stopping us from modifying
+ the registers, memory, etc.
+\end_layout
+
+\begin_layout Standard
+So to set a breakpoint, we just ask the kernel to write an 0xCC in the debugged
+ process's memory, and we continue the process.
+ When the breakpoint is hit, and the process has stopped, we check to see
+ if it's one of our own breakpoints.
+ If it is, we restore the 0xCC to whatever value was sitting there before
+ we set the breakpoint, and continue the process as if nothing happened.
+\end_layout
+
+\begin_layout Standard
+If we want the breakpoint to be hit potentially multiple times, the easiest
+ way would be to use a hardware single-step, and then restore the 0xCC.
+ If you really hate using hardware features, we could have set a burner
+ breakpoint at the next instruction to do a single step, but that would
+ require disassembly of the current instruction (to know where the next
+ instruction even is), and would probably be much slower.
+\end_layout
+
+\begin_layout Section*
+ptrace 101
+\end_layout
+
+\begin_layout Standard
+The way you debug on Linux is with the ptrace system call, and with waitpid
+ (which waits for a process to be stopped).
+\end_layout
+
+\begin_layout Standard
+ptrace returns a 
+\family typewriter
+long
+\family default
+ and gets 
+\family typewriter
+request, pid, addr, data
+\family default
+.
+ Errors are usually represented as -1 and stored in errno.
+ The manpage for ptrace is 
+\begin_inset CommandInset href
+LatexCommand href
+name "here"
+target "https://man7.org/linux/man-pages/man2/ptrace.2.html"
+literal "false"
+
+\end_inset
+
+, but you could use this as a quick reference:
+\end_layout
+
+\begin_layout Itemize
+
+\series bold
+PTRACE_TRACEME
+\series default
+: to start tracing a subprocess, rather than attaching to another process
+ in the system, you do the following dance:
+\end_layout
+
+\begin_deeper
+\begin_layout Standard
+\begin_inset listings
+lstparams "language=C,tabsize=4"
+inline false
+status open
+
+\begin_layout Plain Layout
+
+pid_t child_pid = fork();
+\end_layout
+
+\begin_layout Plain Layout
+
+if (child_pid == 0) {
+\end_layout
+
+\begin_layout Plain Layout
+
+    ptrace(PTRACE_TRACEME, 0, 0, 0);
+\end_layout
+
+\begin_layout Plain Layout
+
+    execve(exec_name, argv, envp);
+\end_layout
+
+\begin_layout Plain Layout
+
+} else {
+\end_layout
+
+\begin_layout Plain Layout
+
+    waitpid(child_pid, NULL, 0);
+\end_layout
+
+\begin_layout Plain Layout
+
+    // we now have the PID of the ptrace'd process, and are attached.
+ the process is stopped
+\end_layout
+
+\begin_layout Plain Layout
+
+}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Otherwise, you would use 
+\series bold
+PTRACE_ATTACH
+\series default
+, which stops the process and then gives you ptrace access.
+\end_layout
+
+\end_deeper
+\begin_layout Itemize
+In general, playing with the
+\end_layout
+
+\begin_layout Itemize
+
+\series bold
+Memory:
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+
+\series bold
+PTRACE_PEEKTEXT, PTRACE_PEEKDATA
+\series default
+: the return value of ptrace is the 
+\family typewriter
+long
+\family default
+ at 
+\family typewriter
+addr
+\family default
+ from the traced process memory.
+ These are equivalent.
+\end_layout
+
+\begin_layout Itemize
+
+\series bold
+PTRACE_POKETEXT, PTRACE_POKEDATA
+\series default
+: copies the long which is 
+\family typewriter
+data
+\family default
+ to 
+\family typewriter
+addr
+\family default
+ in the process.
+ These are equivalent.
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+We can combine the previous two to put an Interrupt 3 (0xCC):
+\end_layout
+
+\begin_layout Itemize
+\begin_inset listings
+lstparams "language=C"
+inline false
+status open
+
+\begin_layout Plain Layout
+
+long data_at_position = ptrace(PTRACE_PEEKTEXT, child_pid, breakpoint_position,
+ 0);
+\end_layout
+
+\begin_layout Plain Layout
+
+((char *)(&data_at_position))[0] = '
+\backslash
+xcc';
+\end_layout
+
+\begin_layout Plain Layout
+
+ptrace(PTRACE_POKETEXT, child_pid, breakpoint_position, data_at_position);
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\end_deeper
+\end_deeper
+\begin_layout Itemize
+
+\series bold
+Registers:
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+
+\series bold
+PTRACE_GETREGS, PTRACE_SETREGS
+\series default
+: 
+\family typewriter
+addr
+\family default
+ should be the address of a 
+\family typewriter
+user_regs_struct
+\family default
+, and the registers are copied/read into the address.
+\end_layout
+
+\end_deeper
+\begin_layout Itemize
+
+\series bold
+Continuing the process:
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+
+\series bold
+PTRACE_CONT
+\series default
+: continue the process.
+ If 
+\family typewriter
+data
+\family default
+ is not zero, it also sends a signal with that number.
+ The next functions use 
+\family typewriter
+data
+\family default
+ in the same way.
+\end_layout
+
+\begin_layout Itemize
+
+\series bold
+PTRACE_SYSCALL: 
+\series default
+continue the process, BUT stop at the next entry or exit from a syscall.
+ So you call it once, check if it stopped because of as syscall (it's a
+ SIGTRAP and the instruction 2 bytes before is 0x0f 0x05), and if so you're
+ right before the syscall actually ran.
+ Use PTRACE_SYSCALL again to have it stop after the syscall.
+\end_layout
+
+\begin_layout Itemize
+
+\series bold
+PTRACE_SINGLESTEP: 
+\series default
+continue the process, BUT stop at the next instruction.
+\end_layout
+
+\begin_layout Itemize
+
+\series bold
+PTRACE_DETACH
+\series default
+: if for some reason you're done with the process, you can do that.
+ It continues automatically.
+\end_layout
+
+\begin_layout Itemize
+To stop a process, just use the kill syscall.
+\end_layout
+
+\end_deeper
+\begin_layout Itemize
+
+\series bold
+Waiting for the process to stop
+\series default
+: We use 
+\family typewriter
+
+\begin_inset CommandInset href
+LatexCommand href
+name "waitpid"
+target "https://man7.org/linux/man-pages/man3/wait.3p.html"
+literal "false"
+
+\end_inset
+
+
+\family default
+ for that.
+ It blocks until the process stops.
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+\begin_inset listings
+lstparams "language=C"
+inline false
+status open
+
+\begin_layout Plain Layout
+
+int stat_val;
+\end_layout
+
+\begin_layout Plain Layout
+
+waitpid(child_pid, &stat_val, 0);
+\end_layout
+
+\begin_layout Plain Layout
+
+if (WIFSTOPPED(stat_val)) {  // non-zero if process stopped
+\end_layout
+
+\begin_layout Plain Layout
+
+	int stop_sig = WSTOPSIG(stat_val);  // the signal number that caused the
+ stop
+\end_layout
+
+\begin_layout Plain Layout
+
+}
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Itemize
+The full list of functions on stat_val is:
+\begin_inset Tabular
+<lyxtabular version="3" rows="5" columns="3">
+<features tabularvalignment="middle">
+<column alignment="left" valignment="top">
+<column alignment="left" valignment="top">
+<column alignment="left" valignment="top">
+<row>
+<cell alignment="left" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\series bold
+has it happened
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\series bold
+the status code
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" bottomline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\series bold
+explanation
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="left" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+WIFEXITED
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+WEXITSTATUS
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+process has exited normally
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="left" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+WIFSIGNALED
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+WTERMSIG
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+terminated due to uncaught signal
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="left" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+WIFSTOPPED
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+WSTOPSIG
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+process has been stopped
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="left" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+WCONTINUED
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="left" valignment="top" topline="true" bottomline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+someone has continued the process
+\end_layout
+
+\end_inset
+</cell>
+</row>
+</lyxtabular>
+
+\end_inset
+
+
+\end_layout
+
+\end_deeper
+\begin_layout Standard
+There's also PTRACE_SETOPTIONS for extra settings (passed as flags in data)
+ such as making the traced process exit when the debugger exits (PTRACE_O_EXITKI
+LL), stopping before a new process is created (PTRACE_O_TRACECLONE), etc.
+ See the manpage for all the options.
+\end_layout
+
+\begin_layout Section*
+Miscallaneous things I had to learn the hard way and you shouldn't
+\end_layout
+
+\begin_layout Itemize
+ptrace doesn't like being called from two different threads
+\end_layout
+
+\begin_layout Itemize
+the syscall number is stored in orig_rax, not in rax
+\end_layout
+
+\end_body
+\end_document

@@ -33,7 +33,7 @@ jobs:
       - name: Install Inkscape for SVG graphics
         run: sudo apt-get install inkscape
       - name: Install required packages for render.py
-        run: pip3 install css_html_js_minify
+        run: pip3 install css_html_js_minify pygments
       - name: Run render.py
         run: python3 render.py
       - uses: stefanzweifel/git-auto-commit-action@v4
