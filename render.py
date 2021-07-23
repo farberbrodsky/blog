@@ -7,7 +7,7 @@ from pathlib import Path
 from datetime import datetime
 from css_html_js_minify import html_minify, css_minify
 
-html_base = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:ital@0;1&display=swap" rel="stylesheet"><title>'
+html_base = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:ital@0;1&display=swap" rel="stylesheet"><title>'
 navbar = '<nav><h1><a href="/">Misha\'s blog</a></h1><div><p><a href="/articles">Articles</a></p><p><a href="/about">About</a></p></div></nav>'
 
 css_base = css_minify("""
@@ -132,6 +132,12 @@ article {
     max-width: 1200px;
 }
 
+@media only screen and (max-width: 700px) {
+    article {
+        padding: 12px;
+    }
+}
+
 h2, h3 {
     font-size: 32px;
     font-weight: bold;
@@ -153,9 +159,6 @@ td {
     border: 1px black solid;
 }
 
-ul, ol {
-    list-style-position: inside;
-}
 ul {
     list-style-type: disc;
 }
@@ -398,6 +401,6 @@ with open("./docs/about.html", "w") as f:
     f.write(html_minify(about_page))
 
 # Index page has both
-index_page = html_base + f'Misha Farber Brodsky - About page</title><style>{css_minify(article_style + article_index_base_css)}</style></head><body>{navbar}<article>{about_lyx}</article><h2 style="padding:32px;">Articles</h2>{article_index_content}</body></html>'
+index_page = html_base + f'Misha Farber Brodsky - About page</title><style>{css_minify(article_style + article_index_base_css)}</style></head><body>{navbar}<article>{about_lyx}<h2>Articles</h2></article>{article_index_content}</body></html>'
 with open("./docs/index.html", "w") as f:
     f.write(html_minify(index_page))

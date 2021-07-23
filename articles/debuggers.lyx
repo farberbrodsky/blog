@@ -258,7 +258,7 @@ PTRACE_ATTACH
 
 \end_deeper
 \begin_layout Itemize
-In general, playing with the
+In general, playing with the process requires it being stopped.
 \end_layout
 
 \begin_layout Itemize
