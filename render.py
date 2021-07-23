@@ -255,6 +255,9 @@ def compile_lyx_file(filename):
         lyx_output = xhtml_f.readlines()
 
     Path(xhtml_filename).unlink()
+    # look for images
+    potential_images = list(filename.parent.glob("**/*.svg")) + list(filename.parent.glob("**/*.png")) + list(filename.parent.glob("**/*.jpg")) + list(filename.parent.glob("**/*.jpeg"))
+    images = [x for x in potential_images if len(x.name.split("_")) > 1 and x.name.split("_")[0].isdigit()]
 
     # take only the body
     lyx_output = lyx_output[(lyx_output.index('<body dir="auto">\n') + 1):lyx_output.index('</body>\n')]
@@ -301,10 +304,10 @@ def compile_lyx_file(filename):
         extra_style += code_style
 
     lyx_output = list(filter(lambda x: x != "REMOVE_THIS", lyx_output))
-    return lyx_output, extra_style
+    return lyx_output, extra_style, images
 
 def render_one_article(filename):
-    lyx_output, extra_style = compile_lyx_file(filename)
+    lyx_output, extra_style, images = compile_lyx_file(filename)
     title = lyx_output[0][(lyx_output[0].index(">") + 1):lyx_output[0].index("</")]
     # put the title and the date (and author) in one titledate, and the rest into <article>
     if 'class="author"' in lyx_output[1]:
@@ -317,7 +320,7 @@ def render_one_article(filename):
     lyx_output = [navbar] + lyx_output
 
     result = html_minify(html_base + f"{title}</title><style>" + article_style + extra_style + "</style></head><body>" + "".join(lyx_output) + "</body></html>")
-    return result, title, date
+    return result, title, date, images
 
 # Remove existing render
 try:
@@ -342,7 +345,9 @@ for article_path in list(Path("./articles").iterdir()):
     if article_path.suffix != ".lyx":
         continue
     with open(Path("./docs/articles/") / (article_path.stem + ".html"), "w") as article_file:
-        content, title, date = render_one_article(article_path)
+        content, title, date, images = render_one_article(article_path)
+        for image in images:
+            shutil.move(str(image), str(Path("./docs/articles/")))
         article_metadata[article_path.stem] = {"title": title, "date": parse_date(date)}
         article_file.write(content)
 
@@ -394,7 +399,7 @@ my_age = now.year - 2005
 if now.month < 4 or (now.month == 4 and now.day < 20):
     my_age -= 1
 
-compiled_about, compiled_about_extra_style = compile_lyx_file(Path("./about.lyx"))
+compiled_about, compiled_about_extra_style, _ = compile_lyx_file(Path("./about.lyx"))
 about_lyx = "".join(compiled_about).replace("INSERT_AGE_HERE", str(my_age))
 about_page = html_base + f"Misha Farber Brodsky - About page</title><style>{article_style + compiled_about_extra_style}</style></head><body>{navbar}<article>{about_lyx}</article></body></html>"
 with open("./docs/about.html", "w") as f:

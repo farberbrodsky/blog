@@ -1,0 +1,386 @@
+#LyX 2.3 created this file. For more info see http://www.lyx.org/
+\lyxformat 544
+\begin_document
+\begin_header
+\save_transient_properties true
+\origin unavailable
+\textclass article
+\begin_preamble
+\usepackage[use-david]{culmus}
+\end_preamble
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman "default" "default"
+\font_sans "default" "default"
+\font_typewriter "default" "default"
+\font_math "auto" "auto"
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100 100
+\font_tt_scale 100 100
+\use_microtype false
+\use_dash_ligatures true
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\float_placement H
+\paperfontsize default
+\spacing single
+\use_hyperref false
+\papersize a4paper
+\use_geometry true
+\use_package amsmath 1
+\use_package amssymb 1
+\use_package cancel 1
+\use_package esint 1
+\use_package mathdots 1
+\use_package mathtools 1
+\use_package mhchem 1
+\use_package stackrel 1
+\use_package stmaryrd 1
+\use_package undertilde 1
+\cite_engine basic
+\cite_engine_type default
+\biblio_style plain
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date true
+\justification true
+\use_refstyle 1
+\use_minted 0
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\leftmargin 2cm
+\topmargin 2cm
+\rightmargin 2cm
+\bottommargin 2cm
+\headheight 1cm
+\headsep 1cm
+\footskip 1cm
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation skip
+\defskip smallskip
+\is_math_indent 0
+\math_numbering_side default
+\quotes_style english
+\dynamic_quotes 0
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Title
+Lossless compression - how ZIP makes files smaller
+\end_layout
+
+\begin_layout Date
+July 23, 2021
+\end_layout
+
+\begin_layout Standard
+ZIPs use Deflate by default, which was invented for this purpose in the
+ 90s.
+ To make files smaller, deflate uses 
+\shape italic
+huffman trees
+\shape default
+ and 
+\shape italic
+Lempel-Ziv
+\shape default
+.
+\end_layout
+
+\begin_layout Standard
+Deflate is described in 
+\begin_inset CommandInset href
+LatexCommand href
+name "RFC1951"
+target "https://datatracker.ietf.org/doc/html/rfc1951"
+literal "false"
+
+\end_inset
+
+.
+ I've actually written a 
+\begin_inset CommandInset href
+LatexCommand href
+name "decompressor"
+target "https://github.com/farberbrodsky/c-deflate/blob/main/decompressor.c"
+literal "false"
+
+\end_inset
+
+ for it in C, which is riddled with bugs (I tried fuzzing it and I was mortified
+).
+\end_layout
+
+\begin_layout Standard
+We'll first look at huffman trees and Lempel-Ziv theoretically, and then
+ I'll describe how deflate uses them.
+ This article will give you a general overview, but if you want to write
+ a decompressor, you'd still need to read the RFC.
+\end_layout
+
+\begin_layout Section*
+Huffman trees
+\end_layout
+
+\begin_layout Standard
+In regular text, every character takes exactly 8 bits.
+ This is awful - people rarely use the letter q, but it takes just as much
+ space to write a q as it does to write an a, e, i, o or u.
+ If we know what we're gonna write, and thus how frequent every letter is,
+ we can create an code where a, e, i, o and u have 
+\shape italic
+less bits
+\shape default
+ than q.
+\end_layout
+
+\begin_layout Standard
+However, this presents some issues - what if a is 0, b is 10, and c is 100?
+ Then, we could read c as ba.
+ Our code must be 
+\shape italic
+prefix-free
+\shape default
+, which means no character starts with another character.
+ In a prefix-free code, when we read 10, we can immediately say that is
+ 'b', which also makes decoding much faster.
+\end_layout
+
+\begin_layout Standard
+A prefix-free code can be drawn as a tree:
+\end_layout
+
+\begin_layout Standard
+\noindent
+\align center
+\begin_inset Graphics
+	filename ../assets/compression-huffman-1.svg
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+If a code is prefix-free, then it 
+\shape italic
+must
+\shape default
+ be representable as a tree where only leaves have letters.
+ The encoding of b is 1-0, because we first go right then left to get to
+ it.
+ To decode, we simply read a bit and then go accordingly on the tree.
+ To encode, we'd have a table of letter to encoding.
+\end_layout
+
+\begin_layout Standard
+To create a huffman tree by frequencies, the algorithm is as following:
+\end_layout
+
+\begin_layout Enumerate
+Create a tree leaf for every character.
+\end_layout
+
+\begin_layout Enumerate
+Take the two lowest frequencies, and make a tree out of them, that is, ()
+ -> (a, b).
+ The frequency of this is the sum of the frequencies of a, b.
+\end_layout
+
+\begin_layout Enumerate
+Repeat step 2, until there is a single tree.
+\end_layout
+
+\begin_layout Enumerate
+Profit.
+ Your single tree is the most efficient prefix-free code.
+\end_layout
+
+\begin_layout Standard
+This alone can achieve great compression in everyday text - before a long
+ article, you put the huffman tree for it.
+ Then, characters that aren't used can't even be represented, and if we
+ use A all the time it takes less bits.
+\end_layout
+
+\begin_layout Standard
+I've been saying 
+\begin_inset Quotes eld
+\end_inset
+
+huffman tree
+\begin_inset Quotes erd
+\end_inset
+
+ a lot though.
+ How can we make repetitions take less space?
+\end_layout
+
+\begin_layout Section*
+Lempel-Ziv
+\end_layout
+
+\begin_layout Standard
+Real text often repeats repeats itself.
+ Let's say our text is 
+\begin_inset Quotes eld
+\end_inset
+
+Hello Anne, hello Andrew!
+\begin_inset Quotes erd
+\end_inset
+
+.
+ We have a repetition here - 
+\begin_inset Quotes eld
+\end_inset
+
+H(ello An)ne, h(ello An)drew!
+\begin_inset Quotes erd
+\end_inset
+
+.
+ We could represent this as 
+\begin_inset Quotes eld
+\end_inset
+
+Hello Anne, h<12,7>drew!
+\begin_inset Quotes erd
+\end_inset
+
+, where 12 is how many bytes back to go, and 7 is how many bytes to write.
+ Additionally, length may be larger than the offset - for example 
+\begin_inset Quotes eld
+\end_inset
+
+AAAAAAAA
+\begin_inset Quotes erd
+\end_inset
+
+ can be represented as 
+\begin_inset Quotes eld
+\end_inset
+
+A<1,7>
+\begin_inset Quotes erd
+\end_inset
+
+.
+ The decompressor would go 1 byte back, and copy 7 bytes to the next byte.
+\end_layout
+
+\begin_layout Standard
+To find repetitions efficiently, you can use 
+\begin_inset CommandInset href
+LatexCommand href
+name "this algorithm"
+target "https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm"
+literal "false"
+
+\end_inset
+
+, but it's outside the scope of this article.
+\end_layout
+
+\begin_layout Section*
+Using 
+\shape italic
+both of them
+\shape default
+ to create Deflate
+\end_layout
+
+\begin_layout Standard
+A deflate file is built out of blocks.
+ Every block comes with 3 bits of metadata - 1 bit that says whether this
+ is the last block, and 2 bits that say what kind of block it is.
+\end_layout
+
+\begin_layout Standard
+00 - no compression, 01 - fixed Huffman codes, 10 - dynamic Huffman codes,
+ 11 - invalid, error.
+\end_layout
+
+\begin_layout Standard
+A 00 block starts with the length of the block and is used to make sure
+ Deflated files are never more than a few percents larger than uncompressed
+ data.
+ A 01 block does not come with a Huffman code but has a good-enough code
+ included in the RFC, and a 10 block starts with a Huffman tree.
+ The way the huffman tree in a 10 block is encoded is hard to implement,
+ and if you want to implement it you should read the RFC.
+\end_layout
+
+\begin_layout Standard
+A problem with encoding Lempel-Ziv in binary is that you need to have a
+ way to store repetitions in the middle of text, and know whether it's a
+ repetition or text.
+ That's why in our Huffman tree, we actually have more than 256 different
+ values:
+\end_layout
+
+\begin_layout Enumerate
+0-255: literal bytes
+\end_layout
+
+\begin_layout Enumerate
+256: end of block (if you see this in the code, you move on to the next
+ block in Deflate)
+\end_layout
+
+\begin_layout Enumerate
+257-285: length codes, of varying lengths, shown 
+\begin_inset CommandInset href
+LatexCommand href
+name "here"
+target "https://datatracker.ietf.org/doc/html/rfc1951#page-12"
+literal "false"
+
+\end_inset
+
+.
+ There are a few extra bits for length.
+\end_layout
+
+\begin_layout Standard
+After the length code, we have a huffman tree for distances, which works
+ similarly - it has codes 0-29, each of which is for a different range of
+ distances, and extra bits.
+\end_layout
+
+\begin_layout Standard
+And that pretty much sums up Deflate - you have blocks, some of which include
+ a Huffman tree and some of which don't, and to decompress you read the
+ next code according to your Huffman tree, and must store in memory the
+ last 32768 bytes written (maximum distance of repetition).
+ You get both the benefits of Huffman and of Lempel-Ziv: characters used
+ more often take less bits according to your tree, and repetitions are encoded
+ so efficiently, that even a 3-byte repetition can save you some space.
+\end_layout
+
+\end_body
+\end_document
