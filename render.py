@@ -328,6 +328,8 @@ try:
 except:
     pass
 Path("./docs").mkdir()
+with open("./docs/CNAME", "w") as f:
+    f.write("misha.farberbrodsky.com")
 Path("./docs/articles/").mkdir()
 
 article_metadata = {}
